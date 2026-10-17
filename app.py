@@ -74,6 +74,8 @@ button:hover{opacity:.85}button:disabled{opacity:.4;cursor:wait}
 .bar.ind i{width:30%;position:absolute;animation:slide 1.1s ease-in-out infinite}
 @keyframes slide{from{left:-30%}to{left:100%}}
 footer{color:#444;font-size:12px;text-align:center;margin-top:32px}
+.legal{line-height:1.7}.legal h3{font-size:15px;margin:28px 0 4px}.legal p{color:#bdbdbd;margin:0 0 10px}
+.legal a,footer a{color:inherit}footer a:hover{color:var(--txt)}
 </style>
 <main>
 <h1>tool<i>shed</i></h1>
@@ -93,7 +95,7 @@ footer{color:#444;font-size:12px;text-align:center;margin-top:32px}
 {groups}
 {br_cv}
 <button>Convert</button><div class=bar hidden><i></i></div><div class=msg role=status></div></form></section>
-<footer>files are deleted once you have them</footer>
+<footer>files are deleted once you have them &middot; <a href=/terms>terms</a> &middot; <a href=/privacy>privacy</a></footer>
 </main>
 <script>
 document.querySelectorAll('.drop').forEach(d=>{
@@ -142,6 +144,59 @@ document.querySelectorAll('form').forEach(f=>f.onsubmit=async e=>{
   b.disabled=false;b.textContent=label;
 });
 </script>"""
+
+
+# Set with `fly secrets set CONTACT_EMAIL=... BLOCKED=id1,id2` so they stay out of the public repo.
+CONTACT = os.environ.get("CONTACT_EMAIL", "")
+# Links reported in takedown requests: any link containing one of these (e.g. a video id) is refused.
+BLOCKED = [b.strip() for b in os.environ.get("BLOCKED", "").split(",") if b.strip()]
+
+UPDATED = "October 18, 2026"
+
+TERMS = """<h3>What this is</h3>
+<p>toolshed is a free tool that fetches media from a link you give it, or converts a file you upload, and hands the result back to you. It does not host, store or index any content.</p>
+<h3>Your responsibility</h3>
+<p>You may only use toolshed for content you own, content you have permission to download, or content the law lets you copy where you live. You are responsible for what you download and convert and for how you use it. Do not use toolshed to infringe anyone's copyright or to break the terms of the site you are downloading from.</p>
+<h3>No affiliation</h3>
+<p>toolshed is not affiliated with, endorsed by or connected to YouTube, Google, TikTok or ByteDance. All trademarks belong to their owners.</p>
+<h3>No warranty</h3>
+<p>toolshed is provided as is, without any warranty. It may break, go offline, change or stop at any time. To the extent the law allows, we are not liable for any loss or damage from using it.</p>
+<h3>Abuse</h3>
+<p>We may block links, limit use or refuse service to anyone, for example to stop abuse or after a copyright complaint.</p>
+<h3>Copyright complaints</h3>
+<p>If you own the rights to something and want toolshed to stop fetching it, email {contact} with: the work you own, the link or links to block, your name and contact details, and a statement that you are the rights holder (or are allowed to act for them) and believe in good faith that the use is not authorized. We will block the reported links. Because files are deleted as soon as they are delivered, there is nothing stored on our side to remove.</p>
+<h3>Changes</h3>
+<p>We may update these terms. The date at the top shows the latest version. Using toolshed after a change means you accept the new terms.</p>"""
+
+PRIVACY = """<h3>The short version</h3>
+<p>No accounts, no cookies, no analytics, no ads. We do not sell or share your data.</p>
+<h3>What we handle</h3>
+<p>The links you paste and the files you upload, only to do the job you asked for. Uploaded files and results sit in temporary storage while the job runs and are deleted once you download the result, or when the server restarts.</p>
+<h3>Logs</h3>
+<p>toolshed runs on Fly.io in Frankfurt, Germany. Like most web servers it keeps basic request logs, which include your IP address and the pages you request, for a limited time. They are used only to keep the service running and to stop abuse.</p>
+<h3>Other sites</h3>
+<p>When you paste a link, our server contacts that site (for example YouTube or TikTok) to fetch the media. That site sees our server, not you.</p>
+<h3>Your rights</h3>
+<p>Because we keep nothing beyond short-lived logs, there is usually nothing to access or delete. If you have a question or a request about your data, email {contact}.</p>"""
+
+
+def legal(title, body):
+    head = PAGE.split("</style>")[0].replace("<title>toolshed</title>", f"<title>{title} · toolshed</title>")
+    contact = f"<a href=mailto:{CONTACT}>{CONTACT}</a>" if CONTACT else "the contact address listed on the GitHub project"
+    return (
+        f"{head}</style><main class=legal><p><a href=/>&larr; toolshed</a></p><h1>{title}</h1>"
+        f"<p class=sub>Last updated {UPDATED}</p>{body.replace('{contact}', contact)}</main>"
+    )
+
+
+@app.get("/terms")
+def terms():
+    return legal("Terms", TERMS)
+
+
+@app.get("/privacy")
+def privacy():
+    return legal("Privacy", PRIVACY)
 
 
 @app.get("/")
@@ -252,6 +307,8 @@ def download():
     url = request.form.get("url", "").strip()
     if not url.startswith(("http://", "https://")):
         return "Invalid URL", 400
+    if any(b in url for b in BLOCKED):
+        return "This link has been blocked after a copyright request.", 451
     audio = request.form.get("kind") == "audio"
     bitrate = request.form.get("bitrate", "192")
     quality = request.form.get("quality", "best")

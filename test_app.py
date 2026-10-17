@@ -5,6 +5,7 @@ import tempfile
 import time
 from pathlib import Path
 
+import app as appmod
 from app import app
 
 c = app.test_client()
@@ -29,6 +30,11 @@ assert c.get("/").status_code == 200
 assert c.post("/download", data={"url": "file:///etc/passwd"}).status_code == 400
 assert c.post("/convert", data={"to": "-evil"}).status_code == 400
 assert c.post("/download", data={"url": "https://x.com", "quality": "4k"}).status_code == 400
+assert b"/terms" in c.get("/").data
+assert b"Copyright complaints" in c.get("/terms").data and b"No accounts" in c.get("/privacy").data
+appmod.BLOCKED.append("blockme123")
+assert c.post("/download", data={"url": "https://youtu.be/blockme123"}).status_code == 451
+appmod.BLOCKED.clear()
 assert c.get("/progress/nope").status_code == 404 and c.get("/file/nope").status_code == 404
 
 # Make a 3s tone with ffmpeg, convert wav -> mp3 through the app.
