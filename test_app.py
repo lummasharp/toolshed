@@ -52,4 +52,19 @@ assert len(hi.data) > len(lo.data) * 2, (len(lo.data), len(hi.data))
 
 s, r = convert({"to": "png", "file": (io.BytesIO(b"junk"), "bad.wav")})
 assert r is None and s["error"].startswith("Conversion failed:"), s
+assert c.post("/transcript", data={"url": "file:///etc/passwd"}).status_code == 400
+vtt = """WEBVTT
+Kind: captions
+
+00:00.000 --> 00:01.000
+hello <c>there</c>
+
+00:01.000 --> 00:02.000
+hello there
+I&#39;m done. next
+"""
+assert appmod.vtt_text(vtt) == "hello there I'm done.\nnext", appmod.vtt_text(vtt)
+assert appmod.pick_lang({"subtitles": {"live_chat": 1, "de": 1, "en-US": 1}}) == "en-US"
+assert appmod.pick_lang({"automatic_captions": {"en": 1, "es-orig": 1}}) == "es-orig"
+assert appmod.pick_lang({}) is None
 print("ok")

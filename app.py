@@ -1,5 +1,7 @@
-"""toolshed: YouTube/TikTok downloader + file converter. Run: python app.py, open http://127.0.0.1:5000"""
+"""toolshed: YouTube/TikTok downloader, transcripts + file converter. Run: python app.py, open http://127.0.0.1:5000"""
+import html
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -41,60 +43,70 @@ def bitrate_row(cls):
 PAGE = """<!doctype html><html lang=en><meta charset=utf-8><meta name=viewport content="width=device-width,initial-scale=1">
 <title>toolshed</title>
 <style>
-:root{--bg:#0a0a0a;--card:#121212;--line:#232323;--txt:#ededed;--dim:#7a7a7a;--acc:#fff}
+:root{--bg:#09090b;--card:#111113;--line:#222226;--hi:#34343a;--txt:#ececee;--dim:#76767e;--acc:#fff}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--txt);font:15px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
-main{max-width:620px;margin:0 auto;padding:56px 16px}
-h1{font-size:40px;letter-spacing:-.04em;margin:0;font-weight:700}
+body{margin:0;background:var(--bg);color:var(--txt);font:14px/1.5 ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+main{max-width:540px;margin:0 auto;padding:48px 16px}
+header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:24px;letter-spacing:-.04em;margin:0;font-weight:700}
 h1 i{font-style:normal;color:var(--dim)}
-.sub{color:var(--dim);margin:4px 0 40px}
-section{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
-h2{font-size:12px;text-transform:uppercase;letter-spacing:.14em;color:var(--dim);margin:0 0 16px;font-weight:600}
-.row{display:flex;gap:12px;align-items:center;margin-top:12px;flex-wrap:wrap}
-.k{width:64px;color:var(--dim);font-size:13px}
-.pills{display:flex;gap:6px;flex-wrap:wrap;flex:1}
+.sub{color:var(--dim);margin:4px 0 32px}
+.pills{display:flex;gap:4px;flex-wrap:wrap;flex:1}
 .pill input{position:absolute;opacity:0;pointer-events:none}
-.pill span{display:inline-block;padding:6px 12px;border:1px solid var(--line);border-radius:999px;font-size:13px;cursor:pointer;color:var(--dim);transition:.15s}
-.pill span:hover{color:var(--txt);border-color:#3a3a3a}
+.pill span{display:inline-block;padding:3px 10px;border:1px solid var(--line);border-radius:999px;font-size:12px;cursor:pointer;color:var(--dim);transition:.15s}
+.pill span:hover{color:var(--txt);border-color:var(--hi)}
 .pill input:checked+span{background:var(--acc);color:#000;border-color:var(--acc)}
 .pill input:focus-visible+span{outline:2px solid var(--acc);outline-offset:2px}
-input[type=url]{width:100%;background:var(--bg);border:1px solid var(--line);border-radius:10px;color:var(--txt);padding:12px 14px;font:inherit;outline:none}
-input[type=url]:focus{border-color:#555}
-.drop{display:block;border:1px dashed #333;border-radius:10px;padding:22px;text-align:center;color:var(--dim);cursor:pointer;transition:.15s}
-.drop:hover,.drop.over{border-color:#777;color:var(--txt)}
+.tabs{flex:none;background:var(--card);border:1px solid var(--line);border-radius:10px;padding:3px;gap:2px}
+.tabs .pill span{border:0;border-radius:7px;padding:4px 12px;font-size:13px}
+section{display:none;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px}
+main:has([name=tab][value=download]:checked) #download,main:has([name=tab][value=convert]:checked) #convert,main:has([name=tab][value=transcript]:checked) #transcript{display:block}
+.top{display:flex;gap:6px}
+.top>:first-child{flex:1;min-width:0}
+input[type=url],.drop{display:block;background:var(--bg);border:1px solid var(--line);border-radius:8px;color:var(--txt);padding:9px 12px;font:inherit;outline:none;transition:.15s}
+input[type=url]:focus,.drop:hover,.drop.over{border-color:var(--hi)}
+.drop{position:relative;border-style:dashed;color:var(--dim);cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
+.go{flex:none;background:var(--acc);color:#000;border:0;border-radius:8px;padding:0 16px;font:600 13px/1 inherit;font-family:inherit;cursor:pointer;transition:.15s}
+.go:hover{opacity:.85}.go:disabled{opacity:.4;cursor:wait}
+.row{display:flex;gap:10px;align-items:center;margin-top:8px}
+.k{width:52px;flex:none;color:var(--dim);font-size:12px}
 [hidden]{display:none!important}
-.drop{position:relative}.drop input{position:absolute;inset:0;opacity:0;cursor:pointer}
-button{margin-top:18px;width:100%;background:var(--acc);color:#000;border:0;border-radius:10px;padding:12px;font:600 15px/1 inherit;font-family:inherit;cursor:pointer;transition:.15s}
-button:hover{opacity:.85}button:disabled{opacity:.4;cursor:wait}
-.msg{margin-top:10px;font-size:13px;color:var(--dim);min-height:1em;white-space:pre-wrap}.msg.err{color:#ff6b6b}
 .dl .br,.cv .br,.dl .q{display:none}
 .dl:has(input[value=audio]:checked) .br,.cv:has(input[value=mp3]:checked) .br,.dl:has(input[value=video]:checked) .q{display:flex}
-.bar{margin-top:14px;height:4px;background:var(--line);border-radius:4px;overflow:hidden;position:relative}
+.bar{margin-top:12px;height:3px;background:var(--line);border-radius:3px;overflow:hidden;position:relative}
 .bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .3s}
 .bar.ind i{width:30%;position:absolute;animation:slide 1.1s ease-in-out infinite}
 @keyframes slide{from{left:-30%}to{left:100%}}
-footer{color:#444;font-size:12px;text-align:center;margin-top:32px}
-.legal{line-height:1.7}.legal h3{font-size:15px;margin:28px 0 4px}.legal p{color:#bdbdbd;margin:0 0 10px}
+.msg{margin-top:6px;font-size:12px;color:var(--dim);white-space:pre-wrap}.msg:empty{display:none}.msg.err{color:#ff6b6b}
+.out pre{max-height:320px;overflow:auto;white-space:pre-wrap;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:10px 12px;margin:10px 0 0;font:13px/1.6 inherit;font-family:inherit}
+.acts{display:flex;gap:4px;margin-top:8px}
+.ghost{background:none;border:1px solid var(--line);color:var(--dim);border-radius:999px;padding:3px 10px;font:12px/1.5 inherit;font-family:inherit;cursor:pointer;text-decoration:none;transition:.15s}
+.ghost:hover{color:var(--txt);border-color:var(--hi)}
+footer{color:#444;font-size:12px;text-align:center;margin-top:20px}
+.legal{line-height:1.7}.legal h1{font-size:32px}.legal h3{font-size:15px;margin:28px 0 4px}.legal p{color:#bdbdbd;margin:0 0 10px}
 .legal a,footer a{color:inherit}footer a:hover{color:var(--txt)}
 </style>
 <main>
-<h1>tool<i>shed</i></h1>
-<p class=sub>grab it. convert it. done.</p>
+<header><h1>tool<i>shed</i></h1><nav class="pills tabs" aria-label=Tools>{tabs}</nav></header>
 
-<section><h2>Download &middot; YouTube / TikTok</h2>
-<form class=dl action=/download>
-<input name=url type=url required placeholder="paste a link" aria-label="Video link">
+<section id=download><form class=dl action=/download>
+<div class=top><input name=url type=url required placeholder="YouTube or TikTok link" aria-label="Video link"><button class=go>Get</button></div>
 <div class=row><span class=k>as</span><div class=pills>{kinds}</div></div>
 {quality}
 {br_dl}
-<button>Download</button><div class=bar hidden><i></i></div><div class=msg role=status></div></form></section>
+<div class=bar hidden><i></i></div><div class=msg role=status></div></form></section>
 
-<section><h2>Convert</h2>
-<form class=cv action=/convert>
-<label class=drop><input name=file type=file required><span>drop a file or click to pick</span></label>
+<section id=convert><form class=cv action=/convert>
+<div class=top><label class=drop><input name=file type=file required><span>drop a file or click to pick</span></label><button class=go>Convert</button></div>
 {groups}
 {br_cv}
-<button>Convert</button><div class=bar hidden><i></i></div><div class=msg role=status></div></form></section>
+<div class=bar hidden><i></i></div><div class=msg role=status></div></form></section>
+
+<section id=transcript><form class=tr action=/transcript data-text>
+<div class=top><input name=url type=url required placeholder="YouTube or TikTok link" aria-label="Video link"><button class=go>Transcribe</button></div>
+<div class=bar hidden><i></i></div><div class=msg role=status></div>
+<div class=out hidden><pre></pre><div class=acts><button type=button class=ghost data-copy>copy</button><a class=ghost>save .txt</a></div></div></form></section>
 <footer>files are deleted once you have them &middot; <a href=/terms>terms</a> &middot; <a href=/privacy>privacy</a></footer>
 </main>
 <script>
@@ -116,6 +128,10 @@ document.querySelectorAll('.drop').forEach(d=>{
   d.ondragleave=()=>d.classList.remove('over');
   d.ondrop=e=>{e.preventDefault();d.classList.remove('over');i.files=e.dataTransfer.files;i.onchange()};
 });
+document.querySelectorAll('[data-copy]').forEach(b=>b.onclick=async()=>{
+  await navigator.clipboard.writeText(b.closest('.out').querySelector('pre').textContent);
+  b.textContent='copied';setTimeout(()=>b.textContent='copy',1200);
+});
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 // XHR instead of fetch: fetch can't report upload progress.
 const post=(url,fd,onUp)=>new Promise((res,rej)=>{
@@ -126,9 +142,9 @@ const post=(url,fd,onUp)=>new Promise((res,rej)=>{
 });
 document.querySelectorAll('form').forEach(f=>f.onsubmit=async e=>{
   e.preventDefault();
-  const b=f.querySelector('button'),m=f.querySelector('.msg'),bar=f.querySelector('.bar'),fill=bar.querySelector('i'),label=b.textContent;
+  const b=f.querySelector('.go'),m=f.querySelector('.msg'),bar=f.querySelector('.bar'),fill=bar.querySelector('i'),out=f.querySelector('.out'),label=b.textContent;
   const show=(stage,pct)=>{bar.classList.toggle('ind',pct==null);fill.style.width=pct==null?'':pct+'%';m.textContent=stage+(pct==null?'…':' · '+Math.floor(pct)+'%')};
-  b.disabled=true;b.textContent='Working…';m.className='msg';bar.hidden=false;show('uploading',0);
+  b.disabled=true;b.textContent='…';m.className='msg';bar.hidden=false;if(out)out.hidden=true;show('uploading',0);
   try{
     const {id}=await post(f.getAttribute('action'),new FormData(f),p=>show('uploading',p));
     for(;;){
@@ -138,8 +154,16 @@ document.querySelectorAll('form').forEach(f=>f.onsubmit=async e=>{
       if(s.done)break;
       show(s.stage,s.pct);await sleep(400);
     }
-    show('done',100);m.textContent='Done · saving file';
-    Object.assign(document.createElement('a'),{href:'/file/'+id}).click();
+    if(out){
+      const r=await fetch('/file/'+id),text=await r.text(),cd=r.headers.get('content-disposition')||'';
+      const name=decodeURIComponent((cd.match(/filename\\*=UTF-8''([^;]+)/i)||cd.match(/filename="?([^";]+)/i)||[,'transcript.txt'])[1]);
+      const a=out.querySelector('a');URL.revokeObjectURL(a.href);
+      Object.assign(a,{href:URL.createObjectURL(new Blob([text],{type:'text/plain'})),download:name});
+      out.querySelector('pre').textContent=text;out.hidden=false;bar.hidden=true;m.textContent='';
+    }else{
+      show('done',100);m.textContent='Done · saving file';
+      Object.assign(document.createElement('a'),{href:'/file/'+id}).click();
+    }
   }catch(err){bar.hidden=true;m.className='msg err';m.textContent=err.message}
   b.disabled=false;b.textContent=label;
 });
@@ -203,7 +227,8 @@ def privacy():
 def index():
     groups = "".join(f'<div class=row data-g={g}><span class=k>{g}</span><div class=pills>{pills("to", fs, "mp4")}</div></div>' for g, fs in GROUPS.items())
     return (
-        PAGE.replace("{kinds}", pills("kind", ["video", "audio"], "video", {"video": "video · mp4", "audio": "audio · mp3"}))
+        PAGE.replace("{tabs}", pills("tab", ["download", "convert", "transcript"], "download"))
+        .replace("{kinds}", pills("kind", ["video", "audio"], "video", {"video": "video · mp4", "audio": "audio · mp3"}))
         .replace("{quality}", f'<div class="row q"><span class=k>quality</span><div class=pills>{pills("quality", QUALITIES, "best", {q: q + "p" for q in QUALITIES[1:]})}</div></div>')
         .replace("{br_dl}", bitrate_row("br"))
         .replace("{br_cv}", bitrate_row("br"))
@@ -302,13 +327,73 @@ def do_convert(job, src, out, extra):
     return out
 
 
-@app.post("/download")
-def download():
-    url = request.form.get("url", "").strip()
+def url_error(url):
     if not url.startswith(("http://", "https://")):
         return "Invalid URL", 400
     if any(b in url for b in BLOCKED):
         return "This link has been blocked after a copyright request.", 451
+
+
+def vtt_text(vtt):
+    out = []
+    for line in vtt.splitlines():
+        line = html.unescape(re.sub(r"<[^>]+>", "", line)).strip()
+        if not line or "-->" in line or line.isdigit() or line.startswith(("WEBVTT", "Kind:", "Language:", "NOTE")):
+            continue
+        if line not in out[-2:]:  # auto captions repeat the previous lines as they scroll
+            out.append(line)
+    return re.sub(r"([.!?])\s+", r"\1\n", " ".join(out))  # caption lines break mid-sentence; reflow
+
+
+def pick_lang(info):
+    """Manual subs first (English if there), else auto captions in the video's own language."""
+    manual = [l for l in info.get("subtitles") or {} if l != "live_chat"]
+    if manual:
+        return next((l for l in manual if l.startswith("en")), manual[0])
+    auto = list(info.get("automatic_captions") or {})
+    return next((l for l in auto if l.endswith("-orig")), None) or next((l for l in auto if l.startswith("en")), None)
+
+
+def do_transcript(job, url, opts):
+    job["stage"], job["pct"] = "fetching captions", None
+    with yt_dlp.YoutubeDL(opts) as ydl:
+        info = ydl.extract_info(url, download=False, process=False)
+        lang = pick_lang(info)
+        if not lang:
+            raise RuntimeError("This video has no captions to transcribe.")
+        ydl.params["subtitleslangs"] = [lang]
+        ydl.process_ie_result(info, download=True)
+    sub = next(Path(job["tmp"]).iterdir())  # title.<lang>.vtt, the only file written
+    txt = sub.with_name(sub.name.removesuffix(f".{lang}{sub.suffix}") + ".txt")
+    txt.write_text(vtt_text(sub.read_text(encoding="utf-8", errors="replace")), encoding="utf-8")
+    sub.unlink()
+    return txt
+
+
+@app.post("/transcript")
+def transcript():
+    url = request.form.get("url", "").strip()
+    if err := url_error(url):
+        return err
+    tmp = tempfile.mkdtemp(prefix=TMP_PREFIX)
+    opts = {
+        "outtmpl": f"{tmp}/%(title).80s.%(ext)s",
+        "skip_download": True,
+        "writesubtitles": True,
+        "writeautomaticsub": True,
+        "subtitlesformat": "vtt/best",
+        "noplaylist": True,
+        "quiet": True,
+        "noprogress": True,
+    }
+    return start_job(do_transcript, tmp, url, opts)
+
+
+@app.post("/download")
+def download():
+    url = request.form.get("url", "").strip()
+    if err := url_error(url):
+        return err
     audio = request.form.get("kind") == "audio"
     bitrate = request.form.get("bitrate", "192")
     quality = request.form.get("quality", "best")

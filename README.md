@@ -5,6 +5,7 @@ Grab videos from YouTube and TikTok, or convert a file to another format. One pa
 ## What it does
 
 - **Download** a YouTube or TikTok link as mp4 (best, 1080p, 720p, 480p, 360p) or mp3 (128k to 320k).
+- **Transcribe** a YouTube or TikTok link to plain text from its captions, to copy or save as .txt.
 - **Convert** video, audio and images between common formats. It only offers formats that make sense for the file you drop in.
 - Shows live progress for downloads, uploads and conversions.
 
