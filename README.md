@@ -44,4 +44,5 @@ Jobs are kept in memory, so run a single process.
 ## Notes
 
 - Only download things you have the right to.
+- On a server, YouTube may ask to "confirm you're not a bot". Export a burner account's cookies.txt and set it as `YT_COOKIES` (on Fly: `fly secrets set YT_COOKIES=- < cookies.txt`).
 - YouTube changes often. If downloads break, update yt-dlp: `pip install -U yt-dlp`.

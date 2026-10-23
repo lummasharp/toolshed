@@ -174,6 +174,12 @@ document.querySelectorAll('form').forEach(f=>f.onsubmit=async e=>{
 CONTACT = os.environ.get("CONTACT_EMAIL", "")
 # Links reported in takedown requests: any link containing one of these (e.g. a video id) is refused.
 BLOCKED = [b.strip() for b in os.environ.get("BLOCKED", "").split(",") if b.strip()]
+# YouTube bot-checks datacenter IPs; a burner account's cookies.txt (Netscape format) gets past it.
+COOKIES = {}
+if os.environ.get("YT_COOKIES"):
+    fd, COOKIES["cookiefile"] = tempfile.mkstemp(suffix=".txt")  # yt-dlp rewrites this file, so not a read-only path
+    with os.fdopen(fd, "w") as fh:
+        fh.write(os.environ["YT_COOKIES"])
 
 UPDATED = "October 18, 2026"
 
@@ -383,6 +389,7 @@ def transcript():
         "writeautomaticsub": True,
         "subtitlesformat": "vtt/best",
         "noplaylist": True,
+        **COOKIES,
         "quiet": True,
         "noprogress": True,
     }
@@ -403,6 +410,7 @@ def download():
     opts = {
         "outtmpl": f"{tmp}/%(title).80s.%(ext)s",
         "noplaylist": True,
+        **COOKIES,
         "quiet": True,
         "noprogress": True,
     }
